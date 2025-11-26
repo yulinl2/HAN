@@ -1,0 +1,9 @@
+openai
+anthropic
+numpy
+pydantic
+pyyaml
+tqdm
+pytest
+astor
+ruff

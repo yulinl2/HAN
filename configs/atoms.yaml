@@ -1,0 +1,7 @@
+planner:
+  model: gpt-4o-mini
+  system_prompt: "You are a planner..."
+
+coder:
+  model: gpt-4o-mini
+  system_prompt: "You write Python code..."

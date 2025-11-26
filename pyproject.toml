@@ -1,0 +1,24 @@
+[project]
+name = "han"
+version = "0.1.0"
+description = "Hierarchical Agentic Network — minimal demo"
+requires-python = ">=3.10"
+dependencies = [
+    "openai",
+    "anthropic",
+    "numpy",
+    "pydantic",
+    "pyyaml",
+    "tqdm",
+    "pytest",
+    "astor",
+    "ruff",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["han*"]
+exclude = ["logs*", "configs*", "artifacts*", "experiments*", "tasks*", "docs*"]
