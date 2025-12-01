@@ -16,9 +16,7 @@ Train a small **learned reward model** $R_\theta$ that scores solutions on multi
 
 * Each episode still aims to solve the task, but **acceptance** is now: high $R_\theta$ score **and** tests pass (tests act as a safety floor).
 * The revision loop optimizes a **composite reward**:
-  $$
-  J = \alpha \cdot \text{pass}@k + \beta \cdot R_\theta(\text{code}) - \lambda_{\text{cost}}
-  $$
+  $$J = \alpha \cdot \text{pass}@k + \beta \cdot R_\theta(\text{code}) - \lambda_{\text{cost}}$$
   with $\alpha \gg 0$ as a gate (no aesthetics without correctness) and $\beta>0$.
 
 ## B) Physiology — new organs (all lightweight)
