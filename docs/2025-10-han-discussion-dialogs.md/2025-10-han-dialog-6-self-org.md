@@ -42,14 +42,11 @@ Yes—your “zoom-in → converge locally → zoom-out → reorganize” behavi
 ## 4) Tiny, level-aware reward shaping (still scalar, still automatic)
 
 Episode reward:
-[
-R = \alpha \cdot \text{global_pass}
-;+; \beta \cdot \sum_b w_b ,\Delta \text{local_score}_b
-;+; \gamma \cdot \Delta \text{assembly_score}
-;-; \lambda \cdot \text{tokens} ;-; \rho \cdot \text{redundancy}
-]
+$$
+R = \alpha \cdot \text{global_pass} + \beta \cdot \sum_b w_b ,\Delta \text{local_score}_b + \gamma \cdot \Delta \text{assembly_score} - \lambda \cdot \text{tokens} - \rho \cdot \text{redundancy}
+$$
 
-* `local_score_b` = block tests passed − lint/complexity penalties (readability/modularity if you plugged in (R_\theta)).
+* `local_score_b` = block tests passed − lint/complexity penalties (readability/modularity if you plugged in $R_\theta$).
 * `assembly_score` = integration pass + coupling/cohesion bonus − cross-block churn.
 * **Diminishing-returns detector:** when `Δlocal_score_b < ε` for N steps, advantage shifts toward `assembly_score` → the scheduler learns to zoom out.
 
