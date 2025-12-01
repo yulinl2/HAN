@@ -65,9 +65,7 @@ Record pair $(A,B,y)$ with $y\in{0,1}$ indicating $A\succ B$.
 ### Train $R_\theta$ by preference learning
 
 * **Bradley–Terry / logistic** on pairs:
-  $$
-  \Pr[A \succ B] = \sigma\left(R_\theta(f(A)) - R_\theta(f(B))\right)
-  $$
+  $$\Pr[A \succ B] = \sigma\left(R_\theta(f(A)) - R_\theta(f(B))\right)$$
 * Optimize $-\sum \log \Pr[y]$ with small L2 and **temporal ensembling** (EMA of $\theta$) to avoid drift.
 * Refresh on a **slow timescale** (e.g., every N episodes) so the target doesn’t move too fast.
 
@@ -80,9 +78,7 @@ Record pair $(A,B,y)$ with $y\in{0,1}$ indicating $A\succ B$.
 ## Router & Scheduler training target
 
 Replace the old scalar reward with:
-$$
-R_{\text{episode}} = \alpha \cdot \mathbb{1}[\text{tests pass}] + \beta \cdot R_\theta(\text{final}) - \lambda_\text{tokens} - \lambda_\text{latency} - \rho \cdot \text{redundancy}
-$$
+$$R_{\text{episode}} = \alpha \cdot \mathbb{1}[\text{tests pass}] + \beta \cdot R_\theta(\text{final}) - \lambda_\text{tokens} - \lambda_\text{latency} - \rho \cdot \text{redundancy}$$
 
 * **During revision**, give **delta bonuses** when $R_\theta$ increases or complexity drops **while** tests remain green.
 * **Early stop** learns to trigger when additional loops don’t raise $R_\theta$ beyond $\epsilon$.
