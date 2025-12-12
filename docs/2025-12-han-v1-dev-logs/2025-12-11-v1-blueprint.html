@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.7.30">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>v1-blueprint</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="2025-12-11-v1-blueprint_files/libs/clipboard/clipboard.min.js"></script>
+<script src="2025-12-11-v1-blueprint_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="2025-12-11-v1-blueprint_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="2025-12-11-v1-blueprint_files/libs/quarto-html/popper.min.js"></script>
+<script src="2025-12-11-v1-blueprint_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="2025-12-11-v1-blueprint_files/libs/quarto-html/anchor.min.js"></script>
+<link href="2025-12-11-v1-blueprint_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="2025-12-11-v1-blueprint_files/libs/quarto-html/quarto-syntax-highlighting-de070a7b0ab54f8780927367ac907214.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="2025-12-11-v1-blueprint_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="2025-12-11-v1-blueprint_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="2025-12-11-v1-blueprint_files/libs/bootstrap/bootstrap-81267100e462c21b3d6c0d5bf76a3417.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="fullcontent quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+
+
+
+<section id="han-v1-architecture-design-finalized" class="level1">
+<h1>HAN v1 Architecture: design finalized</h1>
+<section id="design-goals" class="level2">
+<h2 class="anchored" data-anchor-id="design-goals">Design Goals</h2>
+<p>We want:</p>
+<pre class="text"><code>- Few top-level concepts
+- Clear "where do I look" mapping
+- Minimal crossing dependencies
+- Easy to read when sleepy</code></pre>
+<hr>
+</section>
+<section id="v1-minimal-top-level-architecture" class="level2">
+<h2 class="anchored" data-anchor-id="v1-minimal-top-level-architecture">1. V1 Minimal Top-Level Architecture</h2>
+<section id="big-picture-flow" class="level3">
+<h3 class="anchored" data-anchor-id="big-picture-flow">1.1 Big-picture flow</h3>
+<pre class="text"><code>┌───────────────┐            ┌───────────────┐
+│   configs     │            │   tasks       │
+│ (YAML files)  │            │(specs+tests)  │
+└──────┬────────┘            └──────┬────────┘
+       │ load_all_configs()         │ TaskLoader
+       └──────────────┬─────────────┘
+                      v
+              ┌─────────────────┐
+              │  HANOrganism    │   ← 1 full agent
+              └──────┬──────────┘
+                     │ run_episode()
+                     v
+              ┌─────────────────┐
+              │  PolicyTrainer  │   ← learns controller
+              └──────┬──────────┘
+                     │ (optional, outer loop)
+                     v
+              ┌─────────────────┐
+              │  Evolution      │   ← many organisms
+              └─────────────────┘</code></pre>
+<p>You mostly interact with <strong>HANOrganism</strong>, <strong>PolicyTrainer</strong>, and occasionally <strong>Evolution</strong>.</p>
+<hr>
+</section>
+</section>
+<section id="minimal-directory-structure-grouped-by-what-my-brain-cares-about" class="level2">
+<h2 class="anchored" data-anchor-id="minimal-directory-structure-grouped-by-what-my-brain-cares-about">2. Minimal directory structure (grouped by “what my brain cares about”)</h2>
+<section id="packages-as-flowchart" class="level3">
+<h3 class="anchored" data-anchor-id="packages-as-flowchart">2.1 Packages as flowchart</h3>
+<pre class="text"><code>han/
+│
+├── core/        ──► generic engine pieces
+│   │              (messages, episode loop, logging, config, reward)
+│   ├── messages.py
+│   ├── episode.py
+│   ├── telemetry.py
+│   ├── reward.py
+│   └── config.py
+│
+├── agents/      ──► "inside one HANOrganism"
+│   │              (atoms, motifs, graph, controller, organism)
+│   ├── atoms/
+│   ├── motifs/
+│   ├── graph.py
+│   ├── controller.py
+│   └── organism.py
+│
+├── training/    ──► "across episodes / across agents"
+│   │              (policy trainer + evolution)
+│   ├── policy_trainer.py
+│   └── evolution.py
+│
+├── viz/         ──► "for my eyeballs"
+│   ├── episode_view.py
+│   └── graph_view.py
+│
+└── experiments/ ──► entry scripts
+    ├── run_training.py
+    └── run_eval.py</code></pre>
+<p><strong>Key simplification vs previous draft:</strong></p>
+<ul>
+<li>All “agent-related” things (atoms, motifs, graph, router, scheduler, organism) live together in <strong><code>agents/</code></strong>, instead of being fragmented into many peers.</li>
+<li>Policies that change over time live as <strong><code>agents/controller.py</code></strong> + <strong><code>training/policy_trainer.py</code></strong>.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="inside-agents-one-hanorganism-from-top-to-bottom" class="level2">
+<h2 class="anchored" data-anchor-id="inside-agents-one-hanorganism-from-top-to-bottom">3. Inside <code>agents/</code>: one HANOrganism from top to bottom</h2>
+<section id="internal-structure" class="level3">
+<h3 class="anchored" data-anchor-id="internal-structure">3.1 Internal structure</h3>
+<pre class="text"><code>agents/
+│
+├── atoms/          ← small workers (LLM tools)
+│   ├── base.py
+│   ├── planner.py
+│   ├── coder.py
+│   ├── critic.py
+│   └── tester.py
+│
+├── motifs/         ← optional organs (mini-pipelines)
+│   ├── base.py
+│   └── planner_coder_tester.py
+│
+├── graph.py        ← static wiring: who CAN talk to whom
+│
+├── controller.py   ← router + scheduler = "brainstem"
+│
+└── organism.py     ← HANOrganism: wraps all of the above</code></pre>
+<hr>
+</section>
+<section id="hanorganism-flowchart" class="level3">
+<h3 class="anchored" data-anchor-id="hanorganism-flowchart">3.2 HANOrganism flowchart</h3>
+<pre class="text"><code>┌────────────────────────────┐
+│       HANOrganism          │
+│    (agents/organism.py)    │
+└─────────────┬──────────────┘
+              │ from_config(config)
+              v
+   ┌───────────────────────────────┐
+   │ atoms/ build_atoms(config)    │
+   ├───────────────────────────────┤
+   │ motifs/ build_motifs(config)  │
+   ├───────────────────────────────┤
+   │ graph  = build_graph(config)  │
+   ├───────────────────────────────┤
+   │ controller = Controller(…)    │
+   ├───────────────────────────────┤
+   │ episode_runner = EpisodeRunner│
+   └───────────────────────────────┘</code></pre>
+<p><strong>Interface (mentally):</strong></p>
+<pre class="text"><code>HANOrganism.run_episode(task, mode="train"|"eval") -&gt; summary
+HANOrganism.snapshot() -&gt; small JSON of graph/policies/metrics</code></pre>
+<p>This is your <strong>one mental handle</strong> for “the agent”.</p>
+<hr>
+</section>
+</section>
+<section id="controller-unify-router-scheduler" class="level2">
+<h2 class="anchored" data-anchor-id="controller-unify-router-scheduler">4. Controller: unify router + scheduler</h2>
+<p>To keep concepts minimal, we can just say:</p>
+<blockquote class="blockquote">
+<p>“Controller decides <strong>who sees what</strong> and <strong>who acts when</strong>.”</p>
+</blockquote>
+<section id="controller-view" class="level3">
+<h3 class="anchored" data-anchor-id="controller-view">4.1 Controller view</h3>
+<pre class="text"><code>┌─────────────────────────────┐
+│   Controller (agents/...)   │
+│  - routing                  │
+│  - scheduling               │
+└───────────────┬─────────────┘
+                │
+       ┌────────┴────────┐
+       v                 v
+ route(state, msgs)   choose_actors(state, inbox_by_unit)
+       │                 │
+       └────────┬────────┘
+                v
+           should_stop(state)</code></pre>
+<p>Where “unit” can be <strong>atom or motif</strong> depending on how fancy we want to get.</p>
+<hr>
+</section>
+</section>
+<section id="episode-loop-with-controller-hanorganism" class="level2">
+<h2 class="anchored" data-anchor-id="episode-loop-with-controller-hanorganism">5. Episode loop with Controller + HANOrganism</h2>
+<section id="conceptual-call-stack" class="level3">
+<h3 class="anchored" data-anchor-id="conceptual-call-stack">5.1 Conceptual call stack</h3>
+<pre class="text"><code>run_training.py
+      │
+      v
+ HANOrganism.run_episode(task)
+      │
+      v
+ EpisodeRunner.run(task, controller, graph, units)</code></pre>
+</section>
+<section id="episoderunner-step-minimal-controller-centric" class="level3">
+<h3 class="anchored" data-anchor-id="episoderunner-step-minimal-controller-centric">5.2 EpisodeRunner step (minimal, controller-centric)</h3>
+<pre class="text"><code>┌─────────────────────────────┐
+│       EpisodeRunner         │   (core/episode.py)
+└───────────────┬─────────────┘
+                │ loop
+                v
+      ┌──────────────────────┐
+      │ Controller.route     │   assign msgs to units
+      └─────────┬────────────┘
+                v
+      ┌──────────────────────┐
+      │ Controller.choose_*  │   pick active units (atoms/motifs)
+      └─────────┬────────────┘
+                v
+      ┌──────────────────────┐
+      │ Units.act(...)       │   do work (planner/coder/...)
+      └─────────┬────────────┘
+                v
+      ┌──────────────────────┐
+      │ EpisodeState + log   │
+      └─────────┬────────────┘
+                v
+      ┌──────────────────────┐
+      │ Controller.stop?     │   should_stop(...)
+      └──────────────────────┘</code></pre>
+<p>Where each <strong>Unit</strong> is:</p>
+<pre class="text"><code>- either an Atom (simple worker)
+- or a Motif (mini-pipeline of atoms)
+but both expose a unified act(...) interface</code></pre>
+<hr>
+</section>
+</section>
+<section id="training-evolution-now-that-structure-is-simpler" class="level2">
+<h2 class="anchored" data-anchor-id="training-evolution-now-that-structure-is-simpler">6. Training &amp; evolution now that structure is simpler</h2>
+<section id="training-loop" class="level3">
+<h3 class="anchored" data-anchor-id="training-loop">6.1 Training loop</h3>
+<pre class="text"><code>┌───────────────────────────┐
+│ run_training.py           │
+└───────────┬───────────────┘
+            v
+   ┌─────────────────────┐
+   │  configs + tasks    │
+   └──────────┬──────────┘
+              v
+   ┌─────────────────────┐
+   │  HANOrganism        │
+   └──────────┬──────────┘
+              v
+   ┌─────────────────────┐
+   │  EpisodeRunner      │   (many episodes)
+   └──────────┬──────────┘
+              v
+   ┌─────────────────────┐
+   │ PolicyTrainer       │   (training/controller updates)
+   └─────────────────────┘</code></pre>
+</section>
+<section id="evolution-loop-optional-outermost" class="level3">
+<h3 class="anchored" data-anchor-id="evolution-loop-optional-outermost">6.2 Evolution loop (optional outermost)</h3>
+<pre class="text"><code>┌───────────────────────────┐
+│ EvolutionManager          │
+└───────────┬───────────────┘
+            v
+   ┌─────────────────────┐
+   │  [HANOrganism]      │  population
+   └──────────┬──────────┘
+              v
+   ┌─────────────────────┐
+   │ run episodes        │
+   ├─────────────────────┤
+   │ score organisms     │
+   ├─────────────────────┤
+   │ select + mutate     │
+   └─────────────────────┘</code></pre>
+<p><strong>And again</strong>: EvolutionManager only sees <strong>HANOrganism</strong> objects + their configs, not the internals.</p>
+<hr>
+</section>
+</section>
+<section id="where-do-i-look-cheat-card-final-pass" class="level2">
+<h2 class="anchored" data-anchor-id="where-do-i-look-cheat-card-final-pass">7. “Where do I look” cheat card (final pass)</h2>
+<pre class="text"><code>Goal / change I want       →   Where I edit
+──────────────────────────────────────────────────
+Change prompts / tools     →   agents/atoms/
+Add a mini-workflow        →   agents/motifs/
+Change wiring structure    →   agents/graph.py + configs
+Change routing/timing      →   agents/controller.py
+Change episode rules       →   core/episode.py + core/reward.py
+Inspect episodes           →   viz/episode_view.py
+View graph structure       →   viz/graph_view.py
+Tweak training hyperparams →   training/policy_trainer.py + configs
+Try evolution / populations→   training/evolution.py
+Change paths/files etc.    →   core/config.py + experiments/</code></pre>
+<p>This is (hopefully) about as <strong>minimal + structured</strong> as we can get:</p>
+<ul>
+<li><strong>4 top-level packages</strong> in <code>han/</code>: <code>core</code>, <code>agents</code>, <code>training</code>, <code>viz</code>.</li>
+<li>One main mental object: <code>HANOrganism</code>.</li>
+<li>One main decision brain: <code>Controller</code> (routing + scheduling).</li>
+<li>Optional motifs and evolution layered on top, not intertwined.</li>
+</ul>
+<hr>
+<p>📅 <em>Last modified: <code>Thursday, December 11, 2025</code></em></p>
+</section>
+</section>
+<section id="review-where-we-are-right-now" class="level1">
+<h1>Review: where we are right now</h1>
+<p><strong>We’ve converged to a very good v1 local optimum.</strong> Further “descent” should probably wait until you actually start coding and feel real pain points.</p>
+<hr>
+<section id="where-we-are-right-now-architecture-wise" class="level3">
+<h3 class="anchored" data-anchor-id="where-we-are-right-now-architecture-wise">Where we are right now (architecture-wise)</h3>
+<pre class="text"><code>┌─────────────────────────────┐
+│  v0: fuzzy, many concepts   │  (hard to hold in head)
+└───────────┬─────────────────┘
+            v
+┌─────────────────────────────┐
+│  v1: 4 big packages         │
+│  - core                     │
+│  - agents                   │
+│  - training                 │
+│  - viz                      │
+│  main object: HANOrganism   │
+│  main brain: Controller     │
+└─────────────────────────────┘</code></pre>
+<p>This already hits your goals:</p>
+<pre class="text"><code>- Few top-level ideas
+- Clear "where do I look"
+- Flowchart-friendly mental model
+- Separation of:
+   * physics (core)
+   * one agent (agents)
+   * learning (training)
+   * eyeballs (viz)</code></pre>
+<p>So for <strong>architecture design</strong>, I’d say:</p>
+<pre class="text"><code>global_optimum?  → unknown
+good_local_opt?  → YES
+worth more paper redesign NOW? → NO</code></pre>
+<p>Next “gradient steps” should happen <strong>on real feedback</strong>:</p>
+<hr>
+</section>
+<section id="recommended-next-steps-implementation-phase" class="level3">
+<h3 class="anchored" data-anchor-id="recommended-next-steps-implementation-phase">Recommended next steps (implementation phase)</h3>
+<pre class="text"><code>┌──────────────────────────────┐
+│  Step 1: Freeze v1 design    │
+│  (treat as current spec)     │
+└────────────┬─────────────────┘
+             v
+┌──────────────────────────────┐
+│  Step 2: Create file stubs   │
+│  - empty classes/functions   │
+│  - docstrings + flowchart    │
+└────────────┬─────────────────┘
+             v
+┌──────────────────────────────┐
+│  Step 3: Implement the       │
+│  tiniest runnable episode    │
+│  - 1 task                    │
+│  - 1 or 2 atoms              │
+│  - trivial controller        │
+└────────────┬─────────────────┘
+             v
+┌──────────────────────────────┐
+│  Step 4: Observe pain        │
+│  - what feels confusing?     │
+│  - which dirs do you forget? │
+│  - what’s noisy in logs?     │
+└────────────┬─────────────────┘
+             v
+┌──────────────────────────────┐
+│  Step 5: Micro-adjust        │
+│  (rename / move small bits)  │
+└──────────────────────────────┘</code></pre>
+<p>So: <em>for the design itself</em>, I’d say <strong>yes, we’ve converged enough</strong>. The next useful thing isn’t another paper redesign, but:</p>
+<ul>
+<li>stubbing out the structure, and</li>
+<li>getting a <strong>toy episode</strong> running so you can see if your ADHD brain still feels comfy when it’s real code and real logs.</li>
+</ul>
+<p>Whenever you’re ready, I can:</p>
+<ul>
+<li>generate the <strong>actual stub files</strong> for <code>core/</code>, <code>agents/</code>, <code>training/</code>, <code>viz/</code> (just class/function headers + docstrings + tiny ASCII diagrams per file),</li>
+<li>plus a <strong>single-page “HAN v1 architecture” markdown</strong> you can drop directly into <code>docs/</code>.</li>
+</ul>
+<hr>
+<p>📅 <em>Last modified: <code>Thursday, December 11, 2025</code></em></p>
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+        const codeEl = trigger.previousElementSibling.cloneNode(true);
+        for (const childEl of codeEl.children) {
+          if (isCodeAnnotation(childEl)) {
+            childEl.remove();
+          }
+        }
+        return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
